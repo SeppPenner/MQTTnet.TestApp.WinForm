@@ -231,6 +231,12 @@
                 throw new InvalidOperationException();
             }
 
+            options.Credentials = new MqttClientCredentials
+            {
+                Username = "username",
+                Password = Encoding.UTF8.GetBytes("password")
+            };
+
             options.CleanSession = true;
             options.KeepAlivePeriod = TimeSpan.FromSeconds(5);
 
