@@ -2,7 +2,7 @@ MQTTnet.TestApp.WinForm
 ====================================
 
 MQTTnet.TestApp.WinForm is a test application to test [MQTTnet](https://github.com/chkr1011/MQTTnet).
-The assembly was written and tested in .Net Core 3.1 and originally created by [@grammyleung](https://github.com/grammyleung).
+The assembly was written and tested in .Net 5.0 and originally created by [@grammyleung](https://github.com/grammyleung).
 
 [![Build status](https://ci.appveyor.com/api/projects/status/pbwhpsm7er0yaw5r?svg=true)](https://ci.appveyor.com/project/SeppPenner/mqttnet-testapp-winform)
 [![GitHub issues](https://img.shields.io/github/issues/SeppPenner/MQTTnet.TestApp.WinForm.svg)](https://github.com/SeppPenner/MQTTnet.TestApp.WinForm/issues)
@@ -14,4 +14,4 @@ The assembly was written and tested in .Net Core 3.1 and originally created by [
 Change history
 --------------
 
-* **Version 1.0.0.0 (2020-01-15)** : 1.0 release.
+See the [Changelog](https://github.com/SeppPenner/MQTTnet.TestApp.WinForm/blob/master/Changelog.md).
