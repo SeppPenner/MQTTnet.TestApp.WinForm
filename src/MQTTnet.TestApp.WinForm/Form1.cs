@@ -33,17 +33,17 @@ namespace MQTTnet.TestApp.WinForm
         /// <summary>
         /// The managed publisher client.
         /// </summary>
-        private IManagedMqttClient managedMqttClientPublisher;
+        private IManagedMqttClient? managedMqttClientPublisher;
 
         /// <summary>
         /// The managed subscriber client.
         /// </summary>
-        private IManagedMqttClient managedMqttClientSubscriber;
+        private IManagedMqttClient? managedMqttClientSubscriber;
 
         /// <summary>
         /// The MQTT server.
         /// </summary>
-        private IMqttServer mqttServer;
+        private IMqttServer? mqttServer;
 
         /// <summary>
         /// The port.

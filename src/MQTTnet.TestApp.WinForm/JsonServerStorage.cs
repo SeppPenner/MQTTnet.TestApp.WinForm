@@ -58,7 +58,7 @@ namespace MQTTnet.TestApp.WinForm
             try
             {
                 var json = await File.ReadAllTextAsync(this.filename);
-                return JsonConvert.DeserializeObject<List<MqttApplicationMessage>>(json);
+                return JsonConvert.DeserializeObject<List<MqttApplicationMessage>?>(json) ?? new List<MqttApplicationMessage>();
             }
             catch
             {
