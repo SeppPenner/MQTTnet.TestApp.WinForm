@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright file="JsonServerStorage.cs" company="Hämmer Electronics">
 //   Copyright (c) 2020 All rights reserved.
 // </copyright>
@@ -7,77 +7,68 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace MQTTnet.TestApp.WinForm
+namespace MQTTnet.TestApp.WinForm;
+
+/// <inheritdoc cref="IMqttServerStorage"/>
+/// <summary>
+/// The JSON server storage.
+/// </summary>
+/// <seealso cref="IMqttServerStorage"/>
+public class JsonServerStorage : IMqttServerStorage
 {
-    using System.Collections.Generic;
-    using System.IO;
-    using System.Threading.Tasks;
+    /// <summary>
+    /// The file name.
+    /// </summary>
+    private readonly string filename = Path.Combine(Directory.GetCurrentDirectory(), "Retained.json");
 
-    using MQTTnet.Server;
-
-    using Newtonsoft.Json;
+    /// <summary>
+    /// Clears the file.
+    /// </summary>
+    public void Clear()
+    {
+        if (File.Exists(this.filename))
+        {
+            File.Delete(this.filename);
+        }
+    }
 
     /// <inheritdoc cref="IMqttServerStorage"/>
     /// <summary>
-    /// The JSON server storage.
+    /// Loads the retained messages.
     /// </summary>
+    /// <returns>A <see cref="IList{T}"/> of <see cref="MqttApplicationMessage"/>.</returns>
     /// <seealso cref="IMqttServerStorage"/>
-    public class JsonServerStorage : IMqttServerStorage
+    public async Task<IList<MqttApplicationMessage>> LoadRetainedMessagesAsync()
     {
-        /// <summary>
-        /// The file name.
-        /// </summary>
-        private readonly string filename = Path.Combine(Directory.GetCurrentDirectory(), "Retained.json");
+        await Task.CompletedTask;
 
-        /// <summary>
-        /// Clears the file.
-        /// </summary>
-        public void Clear()
+        if (!File.Exists(this.filename))
         {
-            if (File.Exists(this.filename))
-            {
-                File.Delete(this.filename);
-            }
+            return new List<MqttApplicationMessage>();
         }
 
-        /// <inheritdoc cref="IMqttServerStorage"/>
-        /// <summary>
-        /// Loads the retained messages.
-        /// </summary>
-        /// <returns>A <see cref="IList{T}"/> of <see cref="MqttApplicationMessage"/>.</returns>
-        /// <seealso cref="IMqttServerStorage"/>
-        public async Task<IList<MqttApplicationMessage>> LoadRetainedMessagesAsync()
+        try
         {
-            await Task.CompletedTask;
-
-            if (!File.Exists(this.filename))
-            {
-                return new List<MqttApplicationMessage>();
-            }
-
-            try
-            {
-                var json = await File.ReadAllTextAsync(this.filename);
-                return JsonConvert.DeserializeObject<List<MqttApplicationMessage>?>(json) ?? new List<MqttApplicationMessage>();
-            }
-            catch
-            {
-                return new List<MqttApplicationMessage>();
-            }
+            var json = await File.ReadAllTextAsync(this.filename);
+            return JsonConvert.DeserializeObject<List<MqttApplicationMessage>?>(json) ?? new List<MqttApplicationMessage>();
         }
-
-        /// <inheritdoc cref="IMqttServerStorage"/>
-        /// <summary>
-        /// Saves the retained messages to a file.
-        /// </summary>
-        /// <param name="messages">The messages.</param>
-        /// <returns>A <see cref="Task"/> representing any asynchronous operation.</returns>
-        /// <seealso cref="IMqttServerStorage"/>
-        public async Task SaveRetainedMessagesAsync(IList<MqttApplicationMessage> messages)
+        catch
         {
-            await Task.CompletedTask;
-            var json = JsonConvert.SerializeObject(messages);
-            await File.WriteAllTextAsync(this.filename, json);
+            return new List<MqttApplicationMessage>();
         }
+    }
+
+    /// <inheritdoc cref="IMqttServerStorage"/>
+    /// <summary>
+    /// Saves the retained messages to a file.
+    /// </summary>
+    /// <param name="messages">The messages.</param>
+    /// <returns>A <see cref="Task"/> representing any asynchronous operation.</returns>
+    /// <seealso cref="IMqttServerStorage"/>
+    public async Task SaveRetainedMessagesAsync(IList<MqttApplicationMessage> messages)
+    {
+        await Task.CompletedTask;
+        var json = JsonConvert.SerializeObject(messages);
+        await File.WriteAllTextAsync(this.filename, json);
     }
 }
