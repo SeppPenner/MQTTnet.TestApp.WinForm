@@ -17,7 +17,6 @@
     </PackageReference>
     <PackageReference Include="MQTTnet" Version="4.1.0.247" />
     <PackageReference Include="MQTTnet.Extensions.ManagedClient" Version="4.1.0.247" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
   </ItemGroup>
 
 </Project>
