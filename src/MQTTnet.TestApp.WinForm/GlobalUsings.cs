@@ -2,12 +2,10 @@
 global using System.Text;
 global using System.Timers;
 
-global using MQTTnet.Client.Connecting;
-global using MQTTnet.Client.Disconnecting;
-global using MQTTnet.Client.Options;
-global using MQTTnet.Client.Receiving;
+global using MQTTnet.Client;
 global using MQTTnet.Extensions.ManagedClient;
 global using MQTTnet.Formatter;
+global using MQTTnet.Packets;
 global using MQTTnet.Protocol;
 global using MQTTnet.Server;
 

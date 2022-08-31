@@ -27,7 +27,7 @@ public partial class Form1 : Form
     /// <summary>
     /// The MQTT server.
     /// </summary>
-    private IMqttServer? mqttServer;
+    private MqttServer? mqttServer;
 
     /// <summary>
     /// The port.
@@ -48,43 +48,43 @@ public partial class Form1 : Form
             Interval = 1000
         };
 
-        timer.Elapsed += this.TimerElapsed;
+        timer.Elapsed += this.TimerElapsed!;
     }
 
     /// <summary>
     /// Handles the publisher connected event.
     /// </summary>
-    /// <param name="x">The MQTT client connected event args.</param>
-    private static void OnPublisherConnected(MqttClientConnectedEventArgs x)
+    private static Task OnPublisherConnected(MqttClientConnectedEventArgs _)
     {
         MessageBox.Show("Publisher Connected", "ConnectHandler", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return Task.CompletedTask;
     }
 
     /// <summary>
     /// Handles the publisher disconnected event.
     /// </summary>
-    /// <param name="x">The MQTT client disconnected event args.</param>
-    private static void OnPublisherDisconnected(MqttClientDisconnectedEventArgs x)
+    private static Task OnPublisherDisconnected(MqttClientDisconnectedEventArgs _)
     {
         MessageBox.Show("Publisher Disconnected", "ConnectHandler", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return Task.CompletedTask;
     }
 
     /// <summary>
     /// Handles the subscriber connected event.
     /// </summary>
-    /// <param name="x">The MQTT client connected event args.</param>
-    private static void OnSubscriberConnected(MqttClientConnectedEventArgs x)
+    private static Task OnSubscriberConnected(MqttClientConnectedEventArgs _)
     {
         MessageBox.Show("Subscriber Connected", "ConnectHandler", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return Task.CompletedTask;
     }
 
     /// <summary>
     /// Handles the subscriber disconnected event.
     /// </summary>
-    /// <param name="x">The MQTT client disconnected event args.</param>
-    private static void OnSubscriberDisconnected(MqttClientDisconnectedEventArgs x)
+    private static Task OnSubscriberDisconnected(MqttClientDisconnectedEventArgs _)
     {
         MessageBox.Show("Subscriber Disconnected", "ConnectHandler", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -114,7 +114,7 @@ public partial class Form1 : Form
 
             if (this.managedMqttClientPublisher != null)
             {
-                await this.managedMqttClientPublisher.PublishAsync(message);
+                await this.managedMqttClientPublisher.EnqueueAsync(message);
             }
         }
         catch (Exception ex)
@@ -159,18 +159,14 @@ public partial class Form1 : Form
             throw new InvalidOperationException();
         }
 
-        options.Credentials = new MqttClientCredentials
-        {
-            Username = "username",
-            Password = Encoding.UTF8.GetBytes("password")
-        };
+        options.Credentials = new MqttClientCredentials("username", Encoding.UTF8.GetBytes("password"));
 
         options.CleanSession = true;
         options.KeepAlivePeriod = TimeSpan.FromSeconds(5);
         this.managedMqttClientPublisher = mqttFactory.CreateManagedMqttClient();
-        this.managedMqttClientPublisher.UseApplicationMessageReceivedHandler(this.HandleReceivedApplicationMessage);
-        this.managedMqttClientPublisher.ConnectedHandler = new MqttClientConnectedHandlerDelegate(OnPublisherConnected);
-        this.managedMqttClientPublisher.DisconnectedHandler = new MqttClientDisconnectedHandlerDelegate(OnPublisherDisconnected);
+        this.managedMqttClientPublisher.ConnectedAsync += OnPublisherConnected;
+        this.managedMqttClientPublisher.DisconnectedAsync += OnPublisherDisconnected;
+        this.managedMqttClientPublisher.ApplicationMessageReceivedAsync += this.HandleReceivedApplicationMessage;
 
         await this.managedMqttClientPublisher.StartAsync(
             new ManagedMqttClientOptions
@@ -186,7 +182,7 @@ public partial class Form1 : Form
     /// <param name="e">The event args.</param>
     private async void ButtonPublisherStopClick(object sender, EventArgs e)
     {
-        if (this.managedMqttClientPublisher == null)
+        if (this.managedMqttClientPublisher is null)
         {
             return;
         }
@@ -202,45 +198,21 @@ public partial class Form1 : Form
     /// <param name="e">The event args.</param>
     private async void ButtonServerStartClick(object sender, EventArgs e)
     {
-        if (this.mqttServer != null)
+        if (this.mqttServer is not null)
         {
             return;
         }
-
-        var storage = new JsonServerStorage();
-        storage.Clear();
-        this.mqttServer = new MqttFactory().CreateMqttServer();
+        
         var options = new MqttServerOptions();
         options.DefaultEndpointOptions.Port = int.Parse(this.TextBoxPort.Text);
-        options.Storage = storage;
         options.EnablePersistentSessions = true;
-        options.ConnectionValidator = new MqttServerConnectionValidatorDelegate(
-            c =>
-            {
-                if (c.ClientId.Length < 10)
-                {
-                    c.ReasonCode = MqttConnectReasonCode.ClientIdentifierNotValid;
-                    return;
-                }
 
-                if (c.Username != "username")
-                {
-                    c.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
-                    return;
-                }
-
-                if (c.Password != "password")
-                {
-                    c.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
-                    return;
-                }
-
-                c.ReasonCode = MqttConnectReasonCode.Success;
-            });
+        this.mqttServer = new MqttFactory().CreateMqttServer(options);
+        this.mqttServer.ValidatingConnectionAsync += this.ValidateConnectionAsync;
 
         try
         {
-            await this.mqttServer.StartAsync(options);
+            await this.mqttServer.StartAsync();
         }
         catch (Exception ex)
         {
@@ -251,13 +223,41 @@ public partial class Form1 : Form
     }
 
     /// <summary>
+    /// Validates the connection.
+    /// </summary>
+    /// <param name="args">The arguments.</param>
+    private Task ValidateConnectionAsync(ValidatingConnectionEventArgs args)
+    {
+        if (args.ClientId.Length < 10)
+        {
+            args.ReasonCode = MqttConnectReasonCode.ClientIdentifierNotValid;
+            return Task.CompletedTask;
+        }
+
+        if (args.UserName != "username")
+        {
+            args.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
+            return Task.CompletedTask;
+        }
+
+        if (args.Password != "password")
+        {
+            args.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
+            return Task.CompletedTask;
+        }
+
+        args.ReasonCode = MqttConnectReasonCode.Success;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
     /// The method that handles the button click to stop the server.
     /// </summary>
     /// <param name="sender">The sender.</param>
     /// <param name="e">The event args.</param>
     private async void ButtonServerStopClick(object sender, EventArgs e)
     {
-        if (this.mqttServer == null)
+        if (this.mqttServer is null)
         {
             return;
         }
@@ -273,8 +273,13 @@ public partial class Form1 : Form
     /// <param name="e">The event args.</param>
     private async void ButtonSubscribeClick(object sender, EventArgs e)
     {
+        if (this.managedMqttClientSubscriber is null)
+        {
+            return;
+        }
+
         var topicFilter = new MqttTopicFilter { Topic = this.TextBoxTopicSubscribed.Text.Trim() };
-        await this.managedMqttClientSubscriber.SubscribeAsync(topicFilter);
+        await this.managedMqttClientSubscriber.SubscribeAsync(new List<MqttTopicFilter> { topicFilter });
         MessageBox.Show("Topic " + this.TextBoxTopicSubscribed.Text.Trim() + " is subscribed", "Notice", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
@@ -312,19 +317,14 @@ public partial class Form1 : Form
             throw new InvalidOperationException();
         }
 
-        options.Credentials = new MqttClientCredentials
-        {
-            Username = "username",
-            Password = Encoding.UTF8.GetBytes("password")
-        };
-
+        options.Credentials = new MqttClientCredentials("username", Encoding.UTF8.GetBytes("password"));
         options.CleanSession = true;
         options.KeepAlivePeriod = TimeSpan.FromSeconds(5);
 
         this.managedMqttClientSubscriber = mqttFactory.CreateManagedMqttClient();
-        this.managedMqttClientSubscriber.ConnectedHandler = new MqttClientConnectedHandlerDelegate(OnSubscriberConnected);
-        this.managedMqttClientSubscriber.DisconnectedHandler = new MqttClientDisconnectedHandlerDelegate(OnSubscriberDisconnected);
-        this.managedMqttClientSubscriber.ApplicationMessageReceivedHandler = new MqttApplicationMessageReceivedHandlerDelegate(this.OnSubscriberMessageReceived);
+        this.managedMqttClientSubscriber.ConnectedAsync += OnSubscriberConnected;
+        this.managedMqttClientSubscriber.DisconnectedAsync += OnSubscriberDisconnected;
+        this.managedMqttClientSubscriber.ApplicationMessageReceivedAsync += this.OnSubscriberMessageReceived;
 
         await this.managedMqttClientSubscriber.StartAsync(
             new ManagedMqttClientOptions
@@ -340,7 +340,7 @@ public partial class Form1 : Form
     /// <param name="e">The event args.</param>
     private async void ButtonSubscriberStopClick(object sender, EventArgs e)
     {
-        if (this.managedMqttClientSubscriber == null)
+        if (this.managedMqttClientSubscriber is null)
         {
             return;
         }
@@ -353,20 +353,22 @@ public partial class Form1 : Form
     /// Handles the received application message event.
     /// </summary>
     /// <param name="x">The MQTT application message received event args.</param>
-    private void HandleReceivedApplicationMessage(MqttApplicationMessageReceivedEventArgs x)
+    private Task HandleReceivedApplicationMessage(MqttApplicationMessageReceivedEventArgs x)
     {
         var item = $"Timestamp: {DateTime.Now:O} | Topic: {x.ApplicationMessage.Topic} | Payload: {x.ApplicationMessage.ConvertPayloadToString()} | QoS: {x.ApplicationMessage.QualityOfServiceLevel}";
         this.BeginInvoke((MethodInvoker)delegate { this.TextBoxSubscriber.Text = item + Environment.NewLine + this.TextBoxSubscriber.Text; });
+        return Task.CompletedTask;
     }
 
     /// <summary>
     /// Handles the received subscriber message event.
     /// </summary>
     /// <param name="x">The MQTT application message received event args.</param>
-    private void OnSubscriberMessageReceived(MqttApplicationMessageReceivedEventArgs x)
+    private Task OnSubscriberMessageReceived(MqttApplicationMessageReceivedEventArgs x)
     {
         var item = $"Timestamp: {DateTime.Now:O} | Topic: {x.ApplicationMessage.Topic} | Payload: {x.ApplicationMessage.ConvertPayloadToString()} | QoS: {x.ApplicationMessage.QualityOfServiceLevel}";
         this.BeginInvoke((MethodInvoker)delegate { this.TextBoxSubscriber.Text = item + Environment.NewLine + this.TextBoxSubscriber.Text; });
+        return Task.CompletedTask;
     }
 
     /// <summary>
