@@ -40,8 +40,8 @@ is no `Updating.md`, no `HowToUse.md` and no screenshots.
 dotnet build src/MQTTnet.TestApp.WinForm.sln
 ```
 
-- Single target framework `net9.0-windows` in the project, no multi-targeting. `RuntimeIdentifiers`
-  is `win-x64`.
+- Single target framework `net10.0-windows` in the project, no multi-targeting.
+  `RuntimeIdentifiers` is `win-x64`.
 - All build properties live directly in the `.csproj`. There is **no** `Directory.Build.props` in
   this repository.
 - `TreatWarningsAsErrors` is enabled, so every warning breaks the build, NuGet warnings (`NU****`)
