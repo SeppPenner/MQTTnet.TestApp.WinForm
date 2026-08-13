@@ -15,6 +15,16 @@ namespace MQTTnet.TestApp.WinForm;
 public partial class Form1 : Form
 {
     /// <summary>
+    /// The client identifier of the publisher.
+    /// </summary>
+    private const string PublisherClientId = "ClientPublisher";
+
+    /// <summary>
+    /// The client identifier of the subscriber.
+    /// </summary>
+    private const string SubscriberClientId = "ClientSubscriber";
+
+    /// <summary>
     /// The publisher client.
     /// </summary>
     private IMqttClient? mqttClientPublisher;
@@ -111,7 +121,16 @@ public partial class Form1 : Form
     /// <param name="ex">The exception to show.</param>
     private static void ShowError(Exception ex)
     {
-        MessageBox.Show(ex.Message, "Error Occurs", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        ShowError(ex.Message);
+    }
+
+    /// <summary>
+    /// Shows the given error message.
+    /// </summary>
+    /// <param name="message">The message to show.</param>
+    private static void ShowError(string message)
+    {
+        MessageBox.Show(message, "Error Occurs", MessageBoxButtons.OK, MessageBoxIcon.Error);
     }
 
     /// <summary>
@@ -121,8 +140,7 @@ public partial class Form1 : Form
     /// <param name="e">The event args.</param>
     private void ButtonGeneratePublishedMessageClick(object sender, EventArgs e)
     {
-        var message = $"{{\"dt\":\"{DateTimeOffset.Now:O}\"}}";
-        this.TextBoxPublish.Text = message;
+        this.TextBoxPublish.Text = MessageFormatter.CreateGeneratedMessage(DateTimeOffset.Now);
     }
 
     /// <summary>
@@ -136,8 +154,7 @@ public partial class Form1 : Form
 
         try
         {
-            var payload = Encoding.UTF8.GetBytes(this.TextBoxPublish.Text);
-            var message = new MqttApplicationMessageBuilder().WithTopic(this.TextBoxTopicPublished.Text.Trim()).WithPayload(payload).WithQualityOfServiceLevel(MqttQualityOfServiceLevel.AtLeastOnce).WithRetainFlag().Build();
+            var message = MqttObjectFactory.CreateApplicationMessage(this.TextBoxTopicPublished.Text.Trim(), this.TextBoxPublish.Text);
 
             if (this.mqttClientPublisher is not null)
             {
@@ -162,24 +179,7 @@ public partial class Form1 : Form
         try
         {
             var mqttFactory = new MqttClientFactory();
-
-            var tlsOptions = new MqttClientTlsOptions
-            {
-                UseTls = false,
-                IgnoreCertificateChainErrors = true,
-                IgnoreCertificateRevocationErrors = true,
-                AllowUntrustedCertificates = true
-            };
-
-            var options = new MqttClientOptionsBuilder()
-               .WithClientId("ClientPublisher")
-               .WithTcpServer("localhost", int.Parse(this.TextBoxPort.Text.Trim()))
-               .WithProtocolVersion(MqttProtocolVersion.V311)
-               .WithTlsOptions(tlsOptions)
-               .WithCleanSession()
-               .WithKeepAlivePeriod(TimeSpan.FromSeconds(5))
-               .WithCredentials("username", "password")
-               .Build();
+            var options = MqttObjectFactory.CreateClientOptions(PublisherClientId, int.Parse(this.TextBoxPort.Text.Trim()));
 
             if (options.ChannelOptions is null)
             {
@@ -191,7 +191,13 @@ public partial class Form1 : Form
             this.mqttClientPublisher.DisconnectedAsync += OnPublisherDisconnected;
             this.mqttClientPublisher.ApplicationMessageReceivedAsync += this.HandleReceivedApplicationMessage;
 
-            await this.mqttClientPublisher.ConnectAsync(options);
+            var result = await this.mqttClientPublisher.ConnectAsync(options);
+
+            if (result.ResultCode != MqttClientConnectResultCode.Success)
+            {
+                this.DisposePublisher();
+                ShowError($"The broker refused the publisher: {result.ResultCode}.");
+            }
         }
         catch (Exception ex)
         {
@@ -240,16 +246,10 @@ public partial class Form1 : Form
 
         try
         {
-            var options = new MqttServerOptions();
-
-            // IsEnabled is false in a freshly created MqttServerOptions. Without this line StartAsync succeeds
-            // without opening a listener, so no client can ever reach this broker.
-            options.DefaultEndpointOptions.IsEnabled = true;
-            options.DefaultEndpointOptions.Port = int.Parse(this.TextBoxPort.Text.Trim());
-            options.EnablePersistentSessions = true;
+            var options = MqttObjectFactory.CreateServerOptions(int.Parse(this.TextBoxPort.Text.Trim()));
 
             this.mqttServer = new MqttServerFactory().CreateMqttServer(options);
-            this.mqttServer.ValidatingConnectionAsync += this.ValidateConnectionAsync;
+            this.mqttServer.ValidatingConnectionAsync += ValidateConnectionAsync;
 
             await this.mqttServer.StartAsync();
         }
@@ -264,27 +264,9 @@ public partial class Form1 : Form
     /// Validates the connection.
     /// </summary>
     /// <param name="args">The arguments.</param>
-    private Task ValidateConnectionAsync(ValidatingConnectionEventArgs args)
+    private static Task ValidateConnectionAsync(ValidatingConnectionEventArgs args)
     {
-        if (args.ClientId.Length < 10)
-        {
-            args.ReasonCode = MqttConnectReasonCode.ClientIdentifierNotValid;
-            return Task.CompletedTask;
-        }
-
-        if (args.UserName != "username")
-        {
-            args.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
-            return Task.CompletedTask;
-        }
-
-        if (args.Password != "password")
-        {
-            args.ReasonCode = MqttConnectReasonCode.BadUserNameOrPassword;
-            return Task.CompletedTask;
-        }
-
-        args.ReasonCode = MqttConnectReasonCode.Success;
+        args.ReasonCode = ConnectionValidator.GetReasonCode(args.ClientId, args.UserName, args.Password);
         return Task.CompletedTask;
     }
 
@@ -351,24 +333,7 @@ public partial class Form1 : Form
         try
         {
             var mqttFactory = new MqttClientFactory();
-
-            var tlsOptions = new MqttClientTlsOptions
-            {
-                UseTls = false,
-                IgnoreCertificateChainErrors = true,
-                IgnoreCertificateRevocationErrors = true,
-                AllowUntrustedCertificates = true
-            };
-
-            var options = new MqttClientOptionsBuilder()
-               .WithClientId("ClientSubscriber")
-               .WithTcpServer("localhost", int.Parse(this.TextBoxPort.Text.Trim()))
-               .WithProtocolVersion(MqttProtocolVersion.V311)
-               .WithTlsOptions(tlsOptions)
-               .WithCleanSession()
-               .WithKeepAlivePeriod(TimeSpan.FromSeconds(5))
-               .WithCredentials("username", "password")
-               .Build();
+            var options = MqttObjectFactory.CreateClientOptions(SubscriberClientId, int.Parse(this.TextBoxPort.Text.Trim()));
 
             if (options.ChannelOptions is null)
             {
@@ -380,7 +345,13 @@ public partial class Form1 : Form
             this.mqttClientSubscriber.DisconnectedAsync += OnSubscriberDisconnected;
             this.mqttClientSubscriber.ApplicationMessageReceivedAsync += this.OnSubscriberMessageReceived;
 
-            await this.mqttClientSubscriber.ConnectAsync(options);
+            var result = await this.mqttClientSubscriber.ConnectAsync(options);
+
+            if (result.ResultCode != MqttClientConnectResultCode.Success)
+            {
+                this.DisposeSubscriber();
+                ShowError($"The broker refused the subscriber: {result.ResultCode}.");
+            }
         }
         catch (Exception ex)
         {
@@ -449,8 +420,7 @@ public partial class Form1 : Form
     /// <param name="x">The MQTT application message received event args.</param>
     private Task HandleReceivedApplicationMessage(MqttApplicationMessageReceivedEventArgs x)
     {
-        var item = $"Timestamp: {DateTimeOffset.Now:O} | Topic: {x.ApplicationMessage.Topic} | Payload: {x.ApplicationMessage.ConvertPayloadToString()} | QoS: {x.ApplicationMessage.QualityOfServiceLevel}";
-        this.BeginInvoke((MethodInvoker)delegate { this.TextBoxSubscriber.Text = item + Environment.NewLine + this.TextBoxSubscriber.Text; });
+        this.ShowReceivedMessage(x);
         return Task.CompletedTask;
     }
 
@@ -460,9 +430,27 @@ public partial class Form1 : Form
     /// <param name="x">The MQTT application message received event args.</param>
     private Task OnSubscriberMessageReceived(MqttApplicationMessageReceivedEventArgs x)
     {
-        var item = $"Timestamp: {DateTimeOffset.Now:O} | Topic: {x.ApplicationMessage.Topic} | Payload: {x.ApplicationMessage.ConvertPayloadToString()} | QoS: {x.ApplicationMessage.QualityOfServiceLevel}";
-        this.BeginInvoke((MethodInvoker)delegate { this.TextBoxSubscriber.Text = item + Environment.NewLine + this.TextBoxSubscriber.Text; });
+        this.ShowReceivedMessage(x);
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Writes a received message as the newest line into the subscriber text box.
+    /// </summary>
+    /// <param name="x">The MQTT application message received event args.</param>
+    private void ShowReceivedMessage(MqttApplicationMessageReceivedEventArgs x)
+    {
+        if (this.IsDisposed || !this.IsHandleCreated)
+        {
+            return;
+        }
+
+        var item = MessageFormatter.FormatReceivedMessage(
+            DateTimeOffset.Now,
+            x.ApplicationMessage.Topic,
+            x.ApplicationMessage.ConvertPayloadToString(),
+            x.ApplicationMessage.QualityOfServiceLevel);
+        this.BeginInvoke((MethodInvoker)delegate { this.TextBoxSubscriber.Text = item + Environment.NewLine + this.TextBoxSubscriber.Text; });
     }
 
     /// <summary>
@@ -472,9 +460,9 @@ public partial class Form1 : Form
     /// <param name="e">The event args.</param>
     private void TextBoxPortTextChanged(object sender, EventArgs e)
     {
-        if (int.TryParse(this.TextBoxPort.Text.Trim(), out _))
+        if (PortParser.TryParsePort(this.TextBoxPort.Text, out var parsedPort))
         {
-            this.port = this.TextBoxPort.Text.Trim();
+            this.port = parsedPort.ToString();
         }
         else
         {
