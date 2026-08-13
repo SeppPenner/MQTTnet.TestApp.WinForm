@@ -241,6 +241,10 @@ public partial class Form1 : Form
         try
         {
             var options = new MqttServerOptions();
+
+            // IsEnabled is false in a freshly created MqttServerOptions. Without this line StartAsync succeeds
+            // without opening a listener, so no client can ever reach this broker.
+            options.DefaultEndpointOptions.IsEnabled = true;
             options.DefaultEndpointOptions.Port = int.Parse(this.TextBoxPort.Text.Trim());
             options.EnablePersistentSessions = true;
 
