@@ -1,5 +1,6 @@
 # Change history
 
+* **Version 1.0.8.0 (2026-08-13)** : Updated nuget packages, moved to Net 10.0, enabled the default endpoint of the built in broker so that it is reachable at all, added error handling to the button handlers, added a test project.
 * **Version 1.0.7.0 (2025-01-07)** : Updated Nuget packages, added audit mode, moved to Net9.0.
 * **Version 1.0.6.0 (2024-01-04)** : Updated nuget packages, moved to Net 8.0.
 * **Version 1.0.5.0 (2022-11-23)** : Updated nuget packages, moved to Net 7.0.
