@@ -12,23 +12,40 @@ The repository is an application, it is **not** published as a NuGet package and
 installer: no `GeneratePackageOnBuild`, no push script, no `Setup` folder, no Inno Setup script.
 A release ends with the pushed tag.
 
-One solution `src/MQTTnet.TestApp.WinForm.sln` with exactly one project:
+One solution `src/MQTTnet.TestApp.WinForm.sln` with exactly two projects:
 
 - `src/MQTTnet.TestApp.WinForm/MQTTnet.TestApp.WinForm.csproj`, `OutputType` `WinExe`,
-  `UseWindowsForms`, the whole application.
+  `UseWindowsForms`, the application.
+- `src/MQTTnet.TestApp.WinForm.Tests/MQTTnet.TestApp.WinForm.Tests.csproj`, MSTest, added in
+  version 1.0.8.0.
 
 Layout inside `src/MQTTnet.TestApp.WinForm`:
 
 - `Program.cs`: `Main` with `[STAThread]`, sets the high DPI mode and runs `Form1`.
-- `Form1.cs`: everything else. The three MQTT parts live side by side as fields
-  (`mqttServer`, `mqttClientPublisher`, `mqttClientSubscriber`), each with its own start and stop
-  button handler. Keep new logic in that shape, one handler per button.
+- `Form1.cs`: the window. The three MQTT parts live side by side as fields (`mqttServer`,
+  `mqttClientPublisher`, `mqttClientSubscriber`), each with its own start and stop button handler.
+  Keep new handlers in that shape, one handler per button.
 - `Form1.Designer.cs`: generated designer code, tabs and block scoped namespace, it does not follow
   `src/.editorconfig`. Change it through the designer or with matching hand edits, do not reformat
   it.
+- `Logic/`: everything that does not need a window, which is what makes the application testable.
+  `MqttObjectFactory` builds the server options, the client options and the published message,
+  `ConnectionValidator` decides which clients the broker accepts, `MessageFormatter` builds the
+  texts of the two text boxes and `PortParser` reads the port. New logic belongs here, not into a
+  handler.
 - `GlobalUsings.cs`: all usings of the project, including the alias `Timer`.
 
 There is no `.resx` file, the designer works without resources.
+
+Layout inside `src/MQTTnet.TestApp.WinForm.Tests`:
+
+- `MqttRoundtripTests.cs`: the broker and both clients against each other, with the very objects
+  the form uses. It binds a real socket on a free loopback port, so it needs no network and no
+  broker outside the test process. This is the test that keeps the broker reachable, see the
+  changelog entry of 1.0.8.0.
+- `MqttObjectFactoryTests.cs`, `ConnectionValidatorTests.cs`, `MessageFormatterTests.cs` and
+  `PortParserTests.cs`: the classes of the `Logic` folder.
+- `GlobalUsings.cs`: all usings of the test project.
 
 Repository root: `README.md` (the only user documentation, badges and a link to the changelog),
 `Changelog.md`, `License.txt` (MIT), `.gitattributes`, `.gitignore` and `src/.editorconfig`. There
@@ -40,10 +57,14 @@ is no `Updating.md`, no `HowToUse.md` and no screenshots.
 dotnet build src/MQTTnet.TestApp.WinForm.sln
 ```
 
-- Single target framework `net10.0-windows` in the project, no multi-targeting.
-  `RuntimeIdentifiers` is `win-x64`.
-- All build properties live directly in the `.csproj`. There is **no** `Directory.Build.props` in
-  this repository.
+```powershell
+dotnet test src/MQTTnet.TestApp.WinForm.sln
+```
+
+- Single target framework `net10.0-windows` in both projects, no multi-targeting.
+  `RuntimeIdentifiers` is `win-x64` in the application.
+- All build properties live directly in the two `.csproj` files and are duplicated there. There is
+  **no** `Directory.Build.props` in this repository.
 - `TreatWarningsAsErrors` is enabled, so every warning breaks the build, NuGet warnings (`NU****`)
   from restore included. A clean build reports zero warnings, keep it that way.
 - `NU1803` (HTTP source usage during restore) is the one warning suppressed via `NoWarn`. Fix
@@ -56,10 +77,18 @@ dotnet build src/MQTTnet.TestApp.WinForm.sln
   build error. Then build with an explicit source:
   `dotnet build src/MQTTnet.TestApp.WinForm.sln --source https://api.nuget.org/v3/index.json`.
   `dotnet list package --outdated` cannot be rescued that way, it restores against the configured
-  sources regardless of `--source`. Query nuget.org directly in that case.
-- There are no tests. A behaviour change is verified by starting the application, pressing
-  `Server Start`, then `Client Publisher Start` and `Client Subscriber Start`, subscribing to the
-  preset topic and publishing a message. The message has to appear in the lower text box.
+  sources regardless of `--source`. Query nuget.org directly in that case. `dotnet test` does not
+  know `--source` at all, build first and then run it with `--no-build`.
+- Tests are MSTest, in the single test project `src/MQTTnet.TestApp.WinForm.Tests`, which follows
+  the same package set as the sibling repositories: `Microsoft.NET.Test.Sdk`, `MSTest.TestAdapter`,
+  `MSTest.TestFramework`, `coverlet.collector` and `GitVersion.MsBuild`. `dotnet test` runs 37
+  tests. They need no network and no fixture outside the repository, the roundtrip tests bind a
+  free loopback port that is asked for at runtime, so a test run does not collide with a broker
+  that already runs on the machine. Never claim a test run happened without running it.
+- Beyond the tests, a behaviour change of the window is verified by starting the application,
+  pressing `Server Start`, then `Client Subscriber Start`, `Subscribe`, `Client Publisher Start`,
+  `Random` and `Publish`. The published message has to appear in the lower text box. Every connect
+  opens a modal message box that has to be closed for the client to carry on.
 
 ## Code conventions
 
@@ -92,12 +121,20 @@ Do not silently "clean up" these, they are existing behaviour:
 - **Broker and clients in one process.** The form starts a real `MqttServer` on the port from the
   text box and connects its own two clients to `localhost` on the same port. Nothing here talks to a
   remote broker, and the port text box is disabled while the server runs.
-- **Hardcoded credentials.** Both clients send `username` / `password`, and
-  `ValidateConnectionAsync` accepts exactly those. This is a test application, the values are meant
-  to be visible in the source.
-- **Client ids shorter than ten characters are rejected.** `ValidateConnectionAsync` answers with
+- **Hardcoded credentials.** Both clients send `username` / `password`, and `ConnectionValidator`
+  accepts exactly those. This is a test application, the values are meant to be visible in the
+  source.
+- **A refused connection does not throw.** In MQTTnet 5 `ConnectAsync` returns an
+  `MqttClientConnectResult` whose `ResultCode` carries the refusal, `IsConnected` stays `false` and
+  `ConnectedAsync` does not fire. Both start handlers therefore check the result code and clean up
+  themselves, a `try`/`catch` alone would report nothing.
+- **Client ids shorter than ten characters are rejected.** `ConnectionValidator` answers with
   `ClientIdentifierNotValid`. The two built-in ids `ClientPublisher` and `ClientSubscriber` pass, an
   external client connecting to this broker needs a long id as well.
+- **Every connect opens a modal message box.** The four connect and disconnect handlers call
+  `MessageBox.Show` from an MQTTnet callback thread, which blocks that thread until the box is
+  closed. That is fine for a human at the screen, but any automation of the window has to keep
+  closing those boxes or the client stalls.
 - **The publisher also receives.** `ButtonPublisherStartClick` attaches
   `HandleReceivedApplicationMessage` to the publisher client, and that handler writes into
   `TextBoxSubscriber`, the same box the subscriber writes to. The publisher never subscribes to
@@ -114,9 +151,6 @@ Do not silently "clean up" these, they are existing behaviour:
   Those flags do nothing while TLS is off.
 - **AppVeyor badge without CI in the repository.** `README.md` links an AppVeyor build that is
   configured outside of this repository. There is no `.github` folder and no pipeline file here.
-- **The solution has an orphan configuration block.** `ProjectConfigurationPlatforms` lists the GUID
-  `{54305F2A-6706-442F-AD66-F7AF6961B8D5}`, for which no `Project` entry exists. It is the leftover
-  of a removed project, Visual Studio ignores it.
 - **`src/MQTTnet.TestApp.WinForm.sln.DotSettings`** is tracked and holds nothing but a ReSharper
   user dictionary (`Haemmer`, `H_00E4mmer`, `mqtt`, `Tnet`). Leave it alone.
 - **`.gitattributes` sets `* text=auto`**, every rule of the Visual Studio template below it is
