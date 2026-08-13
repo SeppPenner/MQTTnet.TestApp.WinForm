@@ -121,7 +121,6 @@
 			this.TextBoxTopicPublished.Size = new System.Drawing.Size(425, 23);
 			this.TextBoxTopicPublished.TabIndex = 1;
 			this.TextBoxTopicPublished.Text = "brand/type/group/code";
-			this.TextBoxTopicPublished.TextChanged += new System.EventHandler(this.TextBoxPortTextChanged);
 			// 
 			// label4
 			// 
@@ -167,7 +166,6 @@
 			this.TextBoxPublish.Name = "TextBoxPublish";
 			this.TextBoxPublish.Size = new System.Drawing.Size(394, 23);
 			this.TextBoxPublish.TabIndex = 1;
-			this.TextBoxPublish.TextChanged += new System.EventHandler(this.TextBoxPortTextChanged);
 			// 
 			// ButtonPublish
 			// 
@@ -233,7 +231,6 @@
 			this.TextBoxTopicSubscribed.Size = new System.Drawing.Size(344, 23);
 			this.TextBoxTopicSubscribed.TabIndex = 1;
 			this.TextBoxTopicSubscribed.Text = "brand/type/group/code";
-			this.TextBoxTopicSubscribed.TextChanged += new System.EventHandler(this.TextBoxPortTextChanged);
 			// 
 			// ButtonSubscribe
 			// 
